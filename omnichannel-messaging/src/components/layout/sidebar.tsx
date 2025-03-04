@@ -36,11 +36,23 @@ export default function Sidebar() {
           <Link
             href="/dashboard/settings"
             className={`flex items-center px-4 py-2 text-sm rounded-md ${
-              pathname.includes("/settings") ? "bg-indigo-100 text-indigo-700" : "text-gray-700 hover:bg-gray-100"
+              pathname.includes("/settings") && !pathname.includes("/whatsapp-test") 
+                ? "bg-indigo-100 text-indigo-700" 
+                : "text-gray-700 hover:bg-gray-100"
             }`}
           >
             <Cog6ToothIcon className="w-5 h-5 mr-3" />
             Configuración
+          </Link>
+          
+          <Link
+            href="/dashboard/settings/whatsapp-test"
+            className={`flex items-center px-4 py-2 text-sm rounded-md ml-6 ${
+              pathname.includes("/whatsapp-test") ? "bg-indigo-100 text-indigo-700" : "text-gray-700 hover:bg-gray-100"
+            }`}
+          >
+            <span className="w-5 h-5 mr-3 flex items-center justify-center text-xs font-bold">WA</span>
+            Prueba WhatsApp
           </Link>
         </nav>
 
@@ -57,4 +69,3 @@ export default function Sidebar() {
     </div>
   )
 }
-

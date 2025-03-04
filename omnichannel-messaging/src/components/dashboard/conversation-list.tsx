@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { supabaseClient } from "@/lib/supabase/client"
@@ -16,51 +16,55 @@ export default function ConversationList({ onSelectConversation, selectedConvers
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    const fetchConversations = async () => {
-      try {
-        setLoading(true)
+  // Función para obtener las conversaciones
+  const fetchConversations = useCallback(async () => {
+    try {
+      console.log("Fetching conversations...")
+      setLoading(true)
 
-        // Obtener conversaciones con detalles del contacto y último mensaje
-        const { data, error } = await supabaseClient
-          .from("conversations")
-          .select(`
-            *,
-            contact:contacts(id, name, phone, email, profile_pic_url),
-            messages:messages(content, message_type, created_at)
-          `)
-          .eq("status", "open")
-          .order("last_message_at", { ascending: false })
+      // Obtener conversaciones con detalles del contacto y último mensaje
+      const { data, error } = await supabaseClient
+        .from("conversations")
+        .select(`
+          *,
+          contact:contacts(id, name, phone, email, profile_pic_url),
+          messages:messages(content, message_type, created_at)
+        `)
+        .eq("status", "open")
+        .order("last_message_at", { ascending: false })
 
-        if (error) throw error
+      if (error) throw error
 
-        // Transformar los datos para incluir el último mensaje
-        const conversationsWithDetails = data.map((conv: any) => {
-          // Ordenar mensajes por fecha y obtener el último
-          const messages = conv.messages || []
-          messages.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      // Transformar los datos para incluir el último mensaje
+      const conversationsWithDetails = data.map((conv: any) => {
+        // Ordenar mensajes por fecha y obtener el último
+        const messages = conv.messages || []
+        messages.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
-          return {
-            ...conv,
-            contact: conv.contact[0] || null,
-            last_message: messages[0] || null,
-          }
-        })
+        return {
+          ...conv,
+          contact: conv.contact[0] || null,
+          last_message: messages[0] || null,
+        }
+      })
 
-        setConversations(conversationsWithDetails)
-      } catch (error) {
-        console.error("Error fetching conversations:", error)
-        setError("No se pudieron cargar las conversaciones")
-      } finally {
-        setLoading(false)
-      }
+      console.log(`Fetched ${conversationsWithDetails.length} conversations`)
+      setConversations(conversationsWithDetails)
+      setError(null)
+    } catch (error) {
+      console.error("Error fetching conversations:", error)
+      setError("No se pudieron cargar las conversaciones")
+    } finally {
+      setLoading(false)
     }
+  }, [])
 
+  useEffect(() => {
     fetchConversations()
 
     // Suscribirse a cambios en las conversaciones
-    const subscription = supabaseClient
-      .channel("public:conversations")
+    const conversationsSubscription = supabaseClient
+      .channel("conversations-changes")
       .on(
         "postgres_changes",
         {
@@ -68,16 +72,35 @@ export default function ConversationList({ onSelectConversation, selectedConvers
           schema: "public",
           table: "conversations",
         },
-        () => {
+        (payload) => {
+          console.log("Conversation change detected:", payload)
+          fetchConversations()
+        },
+      )
+      .subscribe()
+
+    // Suscribirse a cambios en los mensajes
+    const messagesSubscription = supabaseClient
+      .channel("messages-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+        },
+        (payload) => {
+          console.log("New message detected:", payload)
           fetchConversations()
         },
       )
       .subscribe()
 
     return () => {
-      subscription.unsubscribe()
+      conversationsSubscription.unsubscribe()
+      messagesSubscription.unsubscribe()
     }
-  }, [])
+  }, [fetchConversations])
 
   // Función para formatear la fecha del último mensaje
   const formatLastMessageTime = (dateString: string) => {
@@ -98,7 +121,7 @@ export default function ConversationList({ onSelectConversation, selectedConvers
     return format(date, "dd/MM/yyyy")
   }
 
-  if (loading) {
+  if (loading && conversations.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
@@ -106,11 +129,11 @@ export default function ConversationList({ onSelectConversation, selectedConvers
     )
   }
 
-  if (error) {
+  if (error && conversations.length === 0) {
     return (
       <div className="p-4 text-red-600">
         <p>{error}</p>
-        <button className="mt-2 text-indigo-600 hover:text-indigo-800" onClick={() => window.location.reload()}>
+        <button className="mt-2 text-indigo-600 hover:text-indigo-800" onClick={() => fetchConversations()}>
           Reintentar
         </button>
       </div>

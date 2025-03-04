@@ -1,53 +1,28 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
-import { NextResponse, type NextRequest } from 'next/server'
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 
-export async function middleware(request: NextRequest) {
-  const response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  })
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          response.cookies.set({
-            name,
-            value,
-            ...options,
-          })
-        },
-        remove(name: string, options: CookieOptions) {
-          response.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
-        },
-      },
+export function middleware(request: NextRequest) {
+  // Solo aplicar a rutas de webhook
+  if (request.nextUrl.pathname.startsWith('/api/webhooks')) {
+    console.log(`[Middleware] ${request.method} request to ${request.nextUrl.pathname}`)
+    
+    // Registrar headers para depuración
+    const headers: Record<string, string> = {}
+    request.headers.forEach((value, key) => {
+      headers[key] = value
+    })
+    console.log('[Middleware] Headers:', JSON.stringify(headers, null, 2))
+    
+    // Para solicitudes POST, intentar registrar el cuerpo
+    if (request.method === 'POST') {
+      console.log('[Middleware] Body cannot be logged in middleware (streaming), check route handler logs')
     }
-  )
-
-  await supabase.auth.getSession()
-
-  return response
+  }
+  
+  return NextResponse.next()
 }
 
+// Configurar para que solo se ejecute en rutas específicas
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
-  ],
+  matcher: '/api/webhooks/:path*',
 }

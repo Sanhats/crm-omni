@@ -17,8 +17,8 @@ export default async function DashboardLayout({
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          const cookie = cookieStore.get(name)
+        async get(name: string) {
+          const cookie = await cookieStore.get(name)
           return cookie?.value
         },
       },
